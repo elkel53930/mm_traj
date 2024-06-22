@@ -1,15 +1,18 @@
+use serde::{Deserialize, Serialize};
+
 const DT: f32 = 0.001; // 1ms
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq)]
 pub struct State {
-    x: f32,
-    y: f32,
-    v: f32,
-    a: f32,
-    theta: f32,
-    omega: f32,
+    pub x: f32,
+    pub y: f32,
+    pub v: f32,
+    pub a: f32,
+    pub theta: f32,
+    pub omega: f32,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum TrajResult {
     Done(State),
     Continue(State),
@@ -19,6 +22,7 @@ pub trait Trajectory {
     fn proceed(&mut self) -> TrajResult;
 }
 
+#[derive(Debug)]
 pub struct Straight {
     state: State,
     x_origin: f32,
@@ -74,6 +78,10 @@ impl Straight {
         }
 
         TrajResult::Continue(self.state)
+    }
+
+    pub fn origin(&self) -> (f32, f32) {
+        (self.y_origin, self.x_origin)
     }
 }
 
