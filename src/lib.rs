@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+mod gen;
 
 const DT: f32 = 0.001; // 1ms
 
@@ -12,17 +13,6 @@ pub struct State {
     pub omega: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub enum TrajResult {
-    Done(State),
-    Continue(State),
-}
-
-pub trait Trajectory {
-    fn proceed(&mut self) -> TrajResult;
-}
-
-#[derive(Debug)]
 pub struct Straight {
     state: State,
     x_origin: f32,
@@ -54,13 +44,21 @@ impl Straight {
         }
     }
 
-    pub fn proceed(&mut self) -> TrajResult {
+    pub fn origin(&self) -> (f32, f32) {
+        (self.y_origin, self.x_origin)
+    }
+}
+
+impl Iterator for Straight {
+    type Item = State;
+
+    fn next(&mut self) -> Option<Self::Item> {
         if self.step == 0 {
             self.state.v = self.final_velocity;
             self.state.a = 0.0;
             self.state.x = self.x_origin + self.distance * self.theta.cos();
             self.state.y = self.y_origin + self.distance * self.theta.sin();
-            return TrajResult::Done(self.state);
+            return None;
         }
 
         self.state.omega = 0.0;
@@ -74,16 +72,44 @@ impl Straight {
         if self.position >= self.distance {
             self.state.v = self.final_velocity;
             self.state.a = 0.0;
-            return TrajResult::Done(self.state);
+            self.step = 0; // Ensure that the next call to next() will return None
         }
 
-        TrajResult::Continue(self.state)
-    }
-
-    pub fn origin(&self) -> (f32, f32) {
-        (self.y_origin, self.x_origin)
+        Some(self.state)
     }
 }
+
+
+pub struct Pivot {
+    state: State,
+    gen_sin: gen::GenSin,
+}
+
+impl Pivot {
+    pub fn new(state: State, final_theta: f32, time: f32) -> Self {
+        let gen_sin = gen::GenSin::new(state.theta, state.theta + final_theta, time, DT);
+
+        Pivot {
+            state,
+            gen_sin,
+        }
+    }
+}
+
+impl Iterator for Pivot {
+    type Item = State;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(theta) = self.gen_sin.next() {
+            self.state.omega = (theta - self.state.theta) / DT;
+            self.state.theta = theta;
+            Some(self.state)
+        } else {
+            None
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -100,52 +126,48 @@ mod tests {
         );
     }
 
+    fn straight() {
+        let initial_state = State {
+            x: 0.0,
+            y: 0.0,
+            v: 1.0,
+            a: 0.0,
+            theta: 0.0,
+            omega: 0.0,
+        };
+        let distance = 10.0;
+        let final_velocity = 2.0;
+
+        let mut straight = Straight::new(initial_state, distance, final_velocity);
+        let mut time = 0;
+        println!("straight");
+        print_state_label();
+        while let Some(state) = straight.next() {
+            print_state_for_csv(time, state);
+            time += 1;
+        }
+    }
+
     #[test]
-    fn it_works() {
-        let state = State {
+    fn pivot() {
+        let initial_state = State {
             x: 0.045,
-            y: 0.027,
+            y: 0.045,
             v: 0.0,
             a: 0.0,
             theta: std::f32::consts::PI / 2.0,
             omega: 0.0,
         };
-        let mut straight = Straight::new(state, 0.02, 1.0);
+        let final_theta = std::f32::consts::PI / 2.0;
+        let time = 1.0;
 
-        print_state_label();
-
-        let mut mm_state;
+        let mut pivot = Pivot::new(initial_state, final_theta, time);
         let mut time = 0;
-        loop {
-            match straight.proceed() {
-                TrajResult::Done(state) => {
-                    print_state_for_csv(time, state);
-                    time += 1;
-                    mm_state = state;
-                    break;
-                }
-                TrajResult::Continue(state) => {
-                    print_state_for_csv(time, state);
-                    time += 1;
-                }
-            }
-        }
-
-        let mut straight = Straight::new(mm_state, 0.2, 0.0);
-
-        loop {
-            match straight.proceed() {
-                TrajResult::Done(state) => {
-                    mm_state = state;
-                    print_state_for_csv(time, state);
-                    time += 1;
-                    break;
-                }
-                TrajResult::Continue(state) => {
-                    print_state_for_csv(time, state);
-                    time += 1;
-                }
-            }
+        println!("pivot");
+        print_state_label();
+        while let Some(state) = pivot.next() {
+            print_state_for_csv(time, state);
+            time += 1;
         }
     }
 }
