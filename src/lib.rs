@@ -82,16 +82,16 @@ impl Iterator for Straight {
 
 pub struct Pivot {
     state: State,
-    gen_sin: gen::GenSin,
+    tgen: gen::GenSin,
 }
 
 impl Pivot {
     pub fn new(state: State, final_theta: f32, time: f32) -> Self {
-        let gen_sin = gen::GenSin::new(state.theta, state.theta + final_theta, time, DT);
+        let tgen = gen::GenSin::new(state.theta, state.theta + final_theta, time, DT);
 
         Pivot {
             state,
-            gen_sin,
+            tgen,
         }
     }
 }
@@ -100,7 +100,7 @@ impl Iterator for Pivot {
     type Item = State;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(theta) = self.gen_sin.next() {
+        if let Some(theta) = self.tgen.next() {
             self.state.omega = (theta - self.state.theta) / DT;
             self.state.theta = theta;
             Some(self.state)
